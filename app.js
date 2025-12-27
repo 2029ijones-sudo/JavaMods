@@ -30,17 +30,17 @@ createUploaders(document.getElementById("uploaders"), {
     onWorldUpload: async file => {
         worldData = await loadWorld(file);
         log("World loaded.");
-        updateRunButton();
+        updateRunButton(); // enable button if both files ready
     },
     onModUpload: async file => {
         modsData = await loadMods(file);
         log("Mods loaded.");
-        updateRunButton();
+        updateRunButton(); // enable button if both files ready
     }
 });
 
 // Run button click
-runBtn.onclick = async () => {
+runBtn.onclick = () => {
     log("Run button clicked");
 
     if (!worldData) { log("No world loaded"); return; }
@@ -53,10 +53,10 @@ runBtn.onclick = async () => {
         log("World encrypted for Testing Environment.");
     }
 
-    // Launch the 3D sandbox directly on the main page canvas
-    await startEngine(worldData, modsData, mode);
+    // Launch 3D sandbox on the main canvas (no popups)
+    startEngine(worldData, modsData, mode);
 
     // Export modified world
-    await exportWorld(worldData);
+    exportWorld(worldData);
     log("Sandbox running. Export complete.");
 };
