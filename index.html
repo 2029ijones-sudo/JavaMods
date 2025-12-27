@@ -36,7 +36,8 @@
 <script type="module">
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.162.1/build/three.module.js";
 import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.162.1/examples/jsm/controls/OrbitControls.js";
-import JSZip from "https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm";
+import * as JSZip from "https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm";
+
 
 const consoleEl = document.getElementById("console");
 function log(msg) { consoleEl.textContent += msg + "\n"; consoleEl.scrollTop = consoleEl.scrollHeight; }
