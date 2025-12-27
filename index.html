@@ -24,7 +24,7 @@
 
   <div id="uploaders">
     <label>Upload World (.mcworld): <input type="file" id="worldInput" accept=".mcworld,.zip"></label>
-    <label>Upload Mod (.zip): <input type="file" id="modInput" accept=".zip,.js"></label>
+    <label>Upload Mod (.zip): <input type="file" id="modInput" accept=".zip,.js" disabled></label>
   </div>
 
   <button id="runBtn">Run Sandbox</button>
@@ -45,10 +45,18 @@ let mode = "world";
 let worldData = null;
 let modsData = null;
 
+const modInput = document.getElementById("modInput");
+
+// Mode selection
 document.querySelectorAll('input[name="mode"]').forEach(radio => {
-  radio.addEventListener("change", e => { mode = e.target.value; log("Mode set to " + mode); });
+  radio.addEventListener("change", e => {
+    mode = e.target.value;
+    log("Mode set to " + mode);
+    modInput.disabled = (mode === "world"); // only enable mod upload in test mode
+  });
 });
 
+// World upload
 document.getElementById("worldInput").addEventListener("change", async e => {
   if (!e.target.files.length) return;
   const file = e.target.files[0];
@@ -56,32 +64,39 @@ document.getElementById("worldInput").addEventListener("change", async e => {
   log("World loaded: " + file.name);
 });
 
-document.getElementById("modInput").addEventListener("change", async e => {
+// Mod upload (only required in test mode)
+modInput.addEventListener("change", async e => {
   if (!e.target.files.length) return;
   const file = e.target.files[0];
-  const modZip = await JSZip.loadAsync(file);
+  const zip = await JSZip.loadAsync(file);
   modsData = [];
-  for (const name in modZip.files) {
+  for (const name in zip.files) {
     if (name.endsWith(".js")) {
-      const code = await modZip.file(name).async("string");
+      const code = await zip.file(name).async("string");
       modsData.push(code);
     }
   }
   log("Mods loaded: " + file.name);
 });
 
+// Run Sandbox
 document.getElementById("runBtn").addEventListener("click", async () => {
   if (!worldData) { log("No world uploaded"); return; }
-  if (!modsData) { log("No mods uploaded"); return; }
+  if (mode === "test" && (!modsData || modsData.length === 0)) { log("No mods uploaded for Test Mode"); return; }
 
   log("Preparing sandbox...");
 
-  if (mode === "test") {
+  // Modify world for World Mode or Test Mode
+  if (mode === "world") {
+    // Inject flag for mods enabled
+    worldData.file("javamods/mods_enabled.flag", "true");
+    log("World modified to accept JS/JAR mods");
+  } else if (mode === "test") {
     worldData.file("javamods/encrypted.flag", "true");
     log("World encrypted for Test Mode");
   }
 
-  // Start 3D sandbox
+  // Three.js 3D sandbox
   const canvas = document.getElementById("screen");
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87ceeb);
@@ -101,7 +116,7 @@ document.getElementById("runBtn").addEventListener("click", async () => {
   const grid = new THREE.GridHelper(50, 50);
   scene.add(grid);
 
-  // Mod runtime
+  // Mod runtime (only runs mods in Test Mode)
   const JavaMods = { items: {}, registerItem(item) {
     this.items[item.id] = item;
     log("Item registered: " + item.id);
@@ -113,8 +128,9 @@ document.getElementById("runBtn").addEventListener("click", async () => {
     scene.add(cube);
     item.mesh = cube;
   }};
-
-  modsData.forEach(code => new Function("JavaMods", code)(JavaMods));
+  if (mode === "test") {
+    modsData.forEach(code => new Function("JavaMods", code)(JavaMods));
+  }
 
   function animate() {
     requestAnimationFrame(animate);
@@ -132,5 +148,6 @@ document.getElementById("runBtn").addEventListener("click", async () => {
   log("Sandbox running. World exported.");
 });
 </script>
+
 </body>
 </html>
