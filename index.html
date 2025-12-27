@@ -39,12 +39,11 @@ import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.162.1/exampl
 import JSZip from "https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm";
 
 const consoleEl = document.getElementById("console");
-function log(msg) { consoleEl.textContent += msg + "\\n"; consoleEl.scrollTop = consoleEl.scrollHeight; }
+function log(msg) { consoleEl.textContent += msg + "\n"; consoleEl.scrollTop = consoleEl.scrollHeight; }
 
 let mode = "world";
 let worldData = null;
 let modsData = null;
-
 const modInput = document.getElementById("modInput");
 
 // Mode selection
@@ -52,7 +51,7 @@ document.querySelectorAll('input[name="mode"]').forEach(radio => {
   radio.addEventListener("change", e => {
     mode = e.target.value;
     log("Mode set to " + mode);
-    modInput.disabled = (mode === "world"); // only enable mod upload in test mode
+    modInput.disabled = (mode === "world"); // Only enable mod upload in Test Mode
   });
 });
 
@@ -64,7 +63,7 @@ document.getElementById("worldInput").addEventListener("change", async e => {
   log("World loaded: " + file.name);
 });
 
-// Mod upload (only required in test mode)
+// Mod upload (Test Mode only)
 modInput.addEventListener("change", async e => {
   if (!e.target.files.length) return;
   const file = e.target.files[0];
@@ -74,6 +73,10 @@ modInput.addEventListener("change", async e => {
     if (name.endsWith(".js")) {
       const code = await zip.file(name).async("string");
       modsData.push(code);
+    } else if (name.endsWith(".jar")) {
+      // Keep .jar mods in memory to add to world
+      const jarData = await zip.file(name).async("uint8array");
+      modsData.push({ name, jarData });
     }
   }
   log("Mods loaded: " + file.name);
@@ -86,14 +89,24 @@ document.getElementById("runBtn").addEventListener("click", async () => {
 
   log("Preparing sandbox...");
 
-  // Modify world for World Mode or Test Mode
+  // Ensure javamods folder exists
+  let jmFolder = worldData.folder("javamods");
+  if (!jmFolder) jmFolder = worldData.folder("javamods");
+
   if (mode === "world") {
-    // Inject flag for mods enabled
-    worldData.file("javamods/mods_enabled.flag", "true");
+    jmFolder.file("mods_enabled.flag", "true");
     log("World modified to accept JS/JAR mods");
   } else if (mode === "test") {
-    worldData.file("javamods/encrypted.flag", "true");
+    jmFolder.file("encrypted.flag", "true");
     log("World encrypted for Test Mode");
+
+    // Add uploaded .jar mods inside javamods/
+    modsData.forEach(mod => {
+      if (mod.jarData) {
+        jmFolder.file(mod.name, mod.jarData);
+        log("Added JAR mod: " + mod.name);
+      }
+    });
   }
 
   // Three.js 3D sandbox
@@ -116,7 +129,7 @@ document.getElementById("runBtn").addEventListener("click", async () => {
   const grid = new THREE.GridHelper(50, 50);
   scene.add(grid);
 
-  // Mod runtime (only runs mods in Test Mode)
+  // JS mods runtime (Test Mode)
   const JavaMods = { items: {}, registerItem(item) {
     this.items[item.id] = item;
     log("Item registered: " + item.id);
@@ -129,7 +142,9 @@ document.getElementById("runBtn").addEventListener("click", async () => {
     item.mesh = cube;
   }};
   if (mode === "test") {
-    modsData.forEach(code => new Function("JavaMods", code)(JavaMods));
+    modsData.forEach(code => {
+      if (typeof code === "string") new Function("JavaMods", code)(JavaMods);
+    });
   }
 
   function animate() {
@@ -145,7 +160,7 @@ document.getElementById("runBtn").addEventListener("click", async () => {
   a.href = URL.createObjectURL(blob);
   a.download = "JavaModsWorld.mcworld";
   a.click();
-  log("Sandbox running. World exported.");
+  log("Sandbox running. Modified world downloaded.");
 });
 </script>
 
