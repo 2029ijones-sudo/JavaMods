@@ -3,7 +3,7 @@ import { createUploaders } from "./ui/uploader.js";
 import { log } from "./ui/console.js";
 import { loadWorld } from "./engine/worldLoader.js";
 import { loadMods } from "./engine/injector.js";
-import { launchSandbox } from "./sandbox/sandbox.js";
+import { startEngine } from "./sandbox/renderer.js"; // render directly on main canvas
 import { encryptWorld } from "./engine/encryptor.js";
 import { exportWorld } from "./engine/exporter.js";
 
@@ -11,8 +11,16 @@ let mode = "world";
 let worldData = null;
 let modsData = null;
 
+// Run button reference
+const runBtn = document.getElementById("runBtn");
+
+// Enable button only when both files are loaded
+function updateRunButton() {
+    runBtn.disabled = !(worldData && modsData);
+}
+
 // Mode selector UI
-createModeSelector(document.getElementById("modeSelector"), newMode=>{
+createModeSelector(document.getElementById("modeSelector"), newMode => {
     mode = newMode;
     log(`Mode set to ${mode}`);
 });
@@ -22,20 +30,33 @@ createUploaders(document.getElementById("uploaders"), {
     onWorldUpload: async file => {
         worldData = await loadWorld(file);
         log("World loaded.");
+        updateRunButton();
     },
     onModUpload: async file => {
         modsData = await loadMods(file);
         log("Mods loaded.");
+        updateRunButton();
     }
 });
 
-// Run button
-document.getElementById("runBtn").onclick = async () => {
-    if(!worldData || !modsData){ log("Upload both world and mods first"); return; }
+// Run button click
+runBtn.onclick = async () => {
+    log("Run button clicked");
 
-    if(mode==="test") encryptWorld(worldData);
+    if (!worldData) { log("No world loaded"); return; }
+    if (!modsData) { log("No mods loaded"); return; }
 
-    launchSandbox(worldData, modsData, mode);
+    log("Preparing sandbox...");
 
-    exportWorld(worldData);
+    if (mode === "test") {
+        encryptWorld(worldData);
+        log("World encrypted for Testing Environment.");
+    }
+
+    // Launch the 3D sandbox directly on the main page canvas
+    await startEngine(worldData, modsData, mode);
+
+    // Export modified world
+    await exportWorld(worldData);
+    log("Sandbox running. Export complete.");
 };
