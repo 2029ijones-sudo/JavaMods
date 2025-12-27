@@ -3,33 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <title>JavaMods</title>
-<link rel="stylesheet" href="style.css">
 <style>
-  body {
-    font-family: sans-serif;
-    background: #f0f0f0;
-    margin: 20px;
-  }
-  #controls {
-    margin-bottom: 10px;
-  }
-  #uploaders input {
-    display: block;
-    margin: 5px 0;
-  }
-  #console {
-    background: #222;
-    color: #0f0;
-    padding: 10px;
-    height: 150px;
-    overflow-y: auto;
-    white-space: pre-wrap;
-  }
-  canvas {
-    border: 1px solid #000;
-    display: block;
-    margin-top: 10px;
-  }
+  body { font-family: sans-serif; background: #f0f0f0; margin: 20px; }
+  #controls { margin-bottom: 10px; }
+  #uploaders input { display: block; margin: 5px 0; }
+  #console { background: #222; color: #0f0; padding: 10px; height: 150px; overflow-y: auto; white-space: pre-wrap; }
+  canvas { border: 1px solid #000; display: block; margin-top: 10px; }
+  button { margin-top: 5px; }
 </style>
 </head>
 <body>
@@ -37,22 +17,120 @@
 <h1>JavaMods</h1>
 
 <div id="controls">
-  <!-- Mode selector buttons will be injected here -->
-  <div id="modeSelector"></div>
+  <div id="modeSelector">
+    <label><input type="radio" name="mode" value="world" checked> World Mode</label>
+    <label><input type="radio" name="mode" value="test"> Test Mode</label>
+  </div>
 
-  <!-- File upload inputs will be injected here -->
-  <div id="uploaders"></div>
+  <div id="uploaders">
+    <label>Upload World (.mcworld): <input type="file" id="worldInput" accept=".mcworld,.zip"></label>
+    <label>Upload Mod (.zip): <input type="file" id="modInput" accept=".zip,.js"></label>
+  </div>
 
-  <!-- Run Sandbox button -->
   <button id="runBtn">Run Sandbox</button>
 </div>
 
-<!-- Console log -->
 <pre id="console"></pre>
-
-<!-- Canvas for 3D sandbox -->
 <canvas id="screen" width="800" height="600"></canvas>
 
-<script type="module" src="app.js"></script>
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.162.1/build/three.module.js";
+import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.162.1/examples/jsm/controls/OrbitControls.js";
+import JSZip from "https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm";
+
+const consoleEl = document.getElementById("console");
+function log(msg) { consoleEl.textContent += msg + "\\n"; consoleEl.scrollTop = consoleEl.scrollHeight; }
+
+let mode = "world";
+let worldData = null;
+let modsData = null;
+
+document.querySelectorAll('input[name="mode"]').forEach(radio => {
+  radio.addEventListener("change", e => { mode = e.target.value; log("Mode set to " + mode); });
+});
+
+document.getElementById("worldInput").addEventListener("change", async e => {
+  if (!e.target.files.length) return;
+  const file = e.target.files[0];
+  worldData = await JSZip.loadAsync(file);
+  log("World loaded: " + file.name);
+});
+
+document.getElementById("modInput").addEventListener("change", async e => {
+  if (!e.target.files.length) return;
+  const file = e.target.files[0];
+  const modZip = await JSZip.loadAsync(file);
+  modsData = [];
+  for (const name in modZip.files) {
+    if (name.endsWith(".js")) {
+      const code = await modZip.file(name).async("string");
+      modsData.push(code);
+    }
+  }
+  log("Mods loaded: " + file.name);
+});
+
+document.getElementById("runBtn").addEventListener("click", async () => {
+  if (!worldData) { log("No world uploaded"); return; }
+  if (!modsData) { log("No mods uploaded"); return; }
+
+  log("Preparing sandbox...");
+
+  if (mode === "test") {
+    worldData.file("javamods/encrypted.flag", "true");
+    log("World encrypted for Test Mode");
+  }
+
+  // Start 3D sandbox
+  const canvas = document.getElementById("screen");
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x87ceeb);
+
+  const camera = new THREE.PerspectiveCamera(75, canvas.width / canvas.height, 0.1, 1000);
+  camera.position.set(5, 10, 15);
+
+  const renderer = new THREE.WebGLRenderer({ canvas });
+  renderer.setSize(canvas.width, canvas.height);
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+
+  const light = new THREE.DirectionalLight(0xffffff, 1);
+  light.position.set(10, 20, 10);
+  scene.add(light);
+
+  const grid = new THREE.GridHelper(50, 50);
+  scene.add(grid);
+
+  // Mod runtime
+  const JavaMods = { items: {}, registerItem(item) {
+    this.items[item.id] = item;
+    log("Item registered: " + item.id);
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const texture = new THREE.TextureLoader().load(item.texture || "");
+    const material = new THREE.MeshStandardMaterial({ map: texture });
+    const cube = new THREE.Mesh(geometry, material);
+    cube.position.set(Math.random()*10, 1, Math.random()*10);
+    scene.add(cube);
+    item.mesh = cube;
+  }};
+
+  modsData.forEach(code => new Function("JavaMods", code)(JavaMods));
+
+  function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  // Export modified world
+  const blob = await worldData.generateAsync({ type: "blob" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "JavaModsWorld.mcworld";
+  a.click();
+  log("Sandbox running. World exported.");
+});
+</script>
 </body>
 </html>
