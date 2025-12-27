@@ -1,0 +1,7 @@
+body {
+  background:#111;
+  color:#eee;
+  font-family:monospace;
+  text-align:center;
+}
+button,input { margin:5px; padding:6px; }
